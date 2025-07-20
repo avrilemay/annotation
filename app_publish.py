@@ -71,9 +71,7 @@ def load_full_text(num, date):
     path = index.get((num, date))
     if path:
         # les fichiers JSON sont dans un sous-dossier "decisions/"
-        path_obj = Path(path)
-        if not path_obj.is_absolute():
-            path_obj = Path("decisions") / path_obj
+        path_obj = Path("decisions") / Path(path).name
         try:
             with open(path_obj, "r", encoding="utf-8") as f:
                 return json.load(f).get("text", "")
