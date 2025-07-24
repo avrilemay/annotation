@@ -119,52 +119,84 @@ row = df_todo.iloc[ptr]
 idx = row.name
 
 # ----------------------------------------------------------------------------
-# 5. Affichage : Article (largeur totale) puis Chunk (largeur totale)
-st.markdown(f"### Article {row['pred_art']}")
-st.write(row["article_text"])
-st.markdown("### Chunk à annoter")
-st.write(row["text"])
+# 5. Layout dynamique : 1 colonne quand la décision est masquée, 2 colonnes quand affichée
 
-# ----------------------------------------------------------------------------
-# 6. Question d'annotation
-st.markdown("### L'article est‑il appliqué implicitement?")
+row = df_todo.iloc[ptr]
+idx = row.name
 
-reponse = st.radio(
-    "Choisissez une option",
-    ("Oui", "Non", "À revoir", "Je ne sais pas"),
-    horizontal=True,
-    key=f"rep_{idx}"
-)
+# Pour éviter les collisions de widgets : clé unique
+show_key = f"show_decision_{idx}"
 
-# ----------------------------------------------------------------------------
-# 7. Validation et sauvegarde temporaire
-if st.button("Enregistrer et passer au suivant"):
-    if reponse == "À revoir":
-        st.session_state["df"].at[idx, "revoir"] = "Oui"
-        st.session_state["ptr"] += 1
-    else:
-        st.session_state["df"].at[idx, "implicit"] = reponse
-        st.session_state["df"].at[idx, "revoir"]   = ""
-    try:
-        st.session_state["df"].to_excel(AUTOSAVE_PATH, index=False)
-    except Exception as e:
-        st.warning(f"Autosave KO: {e}")
+# Init
+if show_key not in st.session_state:
+    st.session_state[show_key] = False
+
+# Bouton toggle hors formulaire (pour rerun instantané)
+toggle_label = "▶︎ Afficher la décision" if not st.session_state[show_key] else "◀︎ Masquer la décision"
+if st.button(toggle_label, key=f"btn_toggle_{idx}"):
+    st.session_state[show_key] = not st.session_state[show_key]
     st.rerun()
 
-# ----------------------------------------------------------------------------
-# 8. Décision complète avec surlignage
-num, date = get_num_date(row["decision_id"])
-full_text_raw = load_full_text(num, date)
-full_text_html = render_full_text(full_text_raw, row["text"])
+# Détermine la disposition
+if st.session_state[show_key]:
+    col_left, col_right = st.columns([1, 1], gap="medium")
+else:
+    # uniquement une colonne (pas de bloc blanc)
+    col_left = st.container()
+    col_right = None
 
-with st.expander("Afficher la décision complète (chunk surligné)", expanded=False):
-    st.markdown(
-        full_text_html,
-        unsafe_allow_html=True
-    )
+# ---------------------- Colonne gauche : article + chunk + annotation ----------------------
+with col_left:
+    st.markdown(f"### Article {row['pred_art']}")
+    st.write(row["article_text"])
+
+    st.markdown("### Chunk à annoter")
+    st.write(row["text"])
+
+    st.markdown("### L'article est‑il appliqué implicitement?")
+
+    # Formulaire pour réponse + save
+    with st.form(key=f"form_{idx}"):
+        reponse = st.radio(
+            "Choisissez une option",
+            ("Oui", "Non", "À revoir", "Je ne sais pas"),
+            horizontal=True,
+            key=f"rep_{idx}"
+        )
+
+        save_clicked = st.form_submit_button("Enregistrer et passer au suivant", type="primary")
+        if save_clicked:
+            if reponse == "À revoir":
+                st.session_state["df"].at[idx, "revoir"] = "Oui"
+                st.session_state["ptr"] += 1
+            else:
+                st.session_state["df"].at[idx, "implicit"] = reponse
+                st.session_state["df"].at[idx, "revoir"]   = ""
+            try:
+                st.session_state["df"].to_excel(AUTOSAVE_PATH, index=False)
+            except Exception as e:
+                st.warning(f"Autosave KO: {e}")
+            st.rerun()
+
+# ---------------------- Colonne droite : décision scollable (seulement si visible) ----------------------
+if col_right:
+    num, date = get_num_date(row["decision_id"])
+    full_text_raw = load_full_text(num, date)
+    full_text_html = render_full_text(full_text_raw, row["text"])
+
+    # Un simple bloc scrollable
+    with col_right:
+        st.markdown("### Décision complète")
+        st.markdown(
+            f"""
+            <div style='border:1px solid #ccc; padding:1rem; height:calc(100vh - 180px); overflow-y:auto;'>
+                {full_text_html}
+            </div>
+            """, unsafe_allow_html=True
+        )
 
 # ----------------------------------------------------------------------------
-# 9. Téléchargement du fichier mis à jour
+# 9. Téléchargement fichier mis à jour
 buf = io.BytesIO()
 st.session_state["df"].to_excel(buf, index=False)
 st.sidebar.download_button(
