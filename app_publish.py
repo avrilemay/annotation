@@ -124,28 +124,25 @@ idx = row.name
 row = df_todo.iloc[ptr]
 idx = row.name
 
-# Pour éviter les collisions de widgets : clé unique
+# --- clés uniques ---
 show_key = f"show_decision_{idx}"
+rep_key  = f"rep_{idx}"
 
-# Init
+# Init toggle décision
 if show_key not in st.session_state:
     st.session_state[show_key] = False
 
-# Bouton toggle hors formulaire (pour rerun instantané)
-toggle_label = "▶︎ Afficher la décision" if not st.session_state[show_key] else "◀︎ Masquer la décision"
-if st.button(toggle_label, key=f"btn_toggle_{idx}"):
-    st.session_state[show_key] = not st.session_state[show_key]
-    st.rerun()
+# Init radio sur "Non" si pas encore défini
+if rep_key not in st.session_state:
+    st.session_state[rep_key] = "Non"
 
-# Détermine la disposition
+# --- Layout dynamique : 1 ou 2 colonnes ---
 if st.session_state[show_key]:
     col_left, col_right = st.columns([1, 1], gap="medium")
 else:
-    # uniquement une colonne (pas de bloc blanc)
     col_left = st.container()
     col_right = None
 
-# ---------------------- Colonne gauche : article + chunk + annotation ----------------------
 with col_left:
     st.markdown(f"### Article {row['pred_art']}")
     st.write(row["article_text"])
@@ -155,13 +152,13 @@ with col_left:
 
     st.markdown("### L'article est‑il appliqué implicitement?")
 
-    # Formulaire pour réponse + save
+    # Form pour radio + save
     with st.form(key=f"form_{idx}"):
         reponse = st.radio(
             "Choisissez une option",
             ("Oui", "Non", "À revoir", "Je ne sais pas"),
             horizontal=True,
-            key=f"rep_{idx}"
+            key=rep_key  # garde la valeur dans session_state
         )
 
         save_clicked = st.form_submit_button("Enregistrer et passer au suivant", type="primary")
@@ -178,13 +175,18 @@ with col_left:
                 st.warning(f"Autosave KO: {e}")
             st.rerun()
 
+    # --- Bouton toggle décision SOUS la question ---
+    toggle_label = "▶︎ Afficher la décision" if not st.session_state[show_key] else "◀︎ Masquer la décision"
+    if st.button(toggle_label, key=f"btn_toggle_{idx}"):
+        st.session_state[show_key] = not st.session_state[show_key]
+        st.rerun()
+
 # ---------------------- Colonne droite : décision scollable (seulement si visible) ----------------------
 if col_right:
     num, date = get_num_date(row["decision_id"])
     full_text_raw = load_full_text(num, date)
     full_text_html = render_full_text(full_text_raw, row["text"])
 
-    # Un simple bloc scrollable
     with col_right:
         st.markdown("### Décision complète")
         st.markdown(
@@ -192,8 +194,10 @@ if col_right:
             <div style='border:1px solid #ccc; padding:1rem; height:calc(100vh - 180px); overflow-y:auto;'>
                 {full_text_html}
             </div>
-            """, unsafe_allow_html=True
+            """,
+            unsafe_allow_html=True
         )
+
 
 # ----------------------------------------------------------------------------
 # 9. Téléchargement fichier mis à jour
