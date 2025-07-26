@@ -176,9 +176,12 @@ st.sidebar.metric("Restantes", len(df_todo))
 # -----------------------------------------------------------------------------
 # 7. Téléchargement du fichier mis à jour (sidebar)
 # -----------------------------------------------------------------------------
-# -- Récupère le nom du fichier uploadé, sans extension
+import re as regex  # pour ne pas confondre avec re plus haut
+
 if uploaded is not None and hasattr(uploaded, 'name'):
     base_name = os.path.splitext(uploaded.name)[0]
+    # Supprime tout suffixe _XXX_left à la fin du nom de base (avant l'extension)
+    base_name = regex.sub(r'_\d+_left$', '', base_name)
 else:
     base_name = "mes_annotations"
 
