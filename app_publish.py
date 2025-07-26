@@ -3,6 +3,7 @@ import streamlit.components.v1 as components
 import pandas as pd
 import pickle, hashlib, io, json, html, re, bz2
 from pathlib import Path
+import os
 
 # -----------------------------------------------------------------------------
 # Constantes
@@ -172,13 +173,43 @@ df_todo = df[mask]
 st.sidebar.metric("Total",     len(df))
 st.sidebar.metric("Restantes", len(df_todo))
 
+# -----------------------------------------------------------------------------
+# 7. Téléchargement du fichier mis à jour (sidebar)
+# -----------------------------------------------------------------------------
+# -- Récupère le nom du fichier uploadé, sans extension
+if uploaded is not None and hasattr(uploaded, 'name'):
+    base_name = os.path.splitext(uploaded.name)[0]
+else:
+    base_name = "mes_annotations"
+
+nb_left = len(df_todo)
+dl_filename = f"{base_name}_{nb_left}_left.xlsx"
+
+buf = io.BytesIO()
+st.session_state["df"].to_excel(buf, index=False)
+st.sidebar.download_button(
+    "Télécharger le fichier mis à jour",
+    buf.getvalue(),
+    dl_filename,
+    "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
+)
+
+# -----------------------------------------------------------------------------
+# Fin d'annotation : message + bouton download en grand (optionnel)
+# -----------------------------------------------------------------------------
+if df_todo.empty:
+    st.success("🎉 Toutes les annotations sont terminées\u202f!")
+    st.download_button(
+        "Télécharger le fichier mis à jour",
+        buf.getvalue(),
+        dl_filename,
+        "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
+    )
+    st.stop()
+
 if ptr >= len(df_todo):
     st.session_state["ptr"] = 0
     ptr = 0
-
-if df_todo.empty:
-    st.success("🎉 Toutes les annotations sont terminées\u202f!")
-    st.stop()
 
 row = df_todo.iloc[ptr]
 idx = row.name
@@ -263,16 +294,3 @@ else:
     with layout_placeholder.container():
         col_left = st.container()
         render_left_panel(col_left)
-
-# -----------------------------------------------------------------------------
-# 7. Téléchargement du fichier mis à jour (sidebar)
-# -----------------------------------------------------------------------------
-buf = io.BytesIO()
-st.session_state["df"].to_excel(buf, index=False)
-
-st.sidebar.download_button(
-    "Télécharger le fichier mis à jour",
-    buf.getvalue(),
-    "mes_annotations_mises_a_jour.xlsx",
-    "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
-)
