@@ -16,7 +16,7 @@ AUTOSAVE_PATH = "annotations_autosave.xlsx"      # Fichier autosave local
 LABEL_CHOICES = (
     "Oui",
     "Non",
-    "Non, faits uniquement",
+    "Non, faits ou prétentions des parties uniquement",
     "Non, application d’un régime spécial",
     "Je ne sais pas",
     "À revoir",
