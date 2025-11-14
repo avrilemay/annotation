@@ -173,30 +173,32 @@ def render_decision_panel(full_text_html: str):
 @st.cache_resource
 def get_article_context_map(path: str = CODE_CIVIL_PATH):
     """
-    Construit un mapping article -> contexte (Livre, Titre, Section)
-    à partir du fichier texte complet du Code civil.
+    Construit un mapping article -> contexte (Livre, Titre, Sous-titre, Chapitre,
+    Section, Sous-section, Paragraphe) à partir du fichier texte du Code civil.
     Clé = numéro d'article ("1224", "1216-1", etc.).
     """
     context = {}
 
-    re_livre    = re.compile(r'^(Livre [^:]+):(.*)')
-    re_titre    = re.compile(r'^(Titre [^:]+):(.*)')
-    re_section  = re.compile(r'^(Section [^:]+):(.*)')
-    re_prelim   = re.compile(r'^(Titre préliminaire)(.*)')
-    re_chapitre = re.compile(r'^(Chapitre [^:]+):(.*)')  # <-- NOUVEAU
-    # ⚠️ Ici on capte *tous* les articles sur la ligne, pas seulement le premier
-    re_article  = re.compile(r'Article\s+([\w-]+)')
+    re_livre        = re.compile(r'^(Livre [^:]+):(.*)')
+    re_titre        = re.compile(r'^(Titre [^:]+):(.*)')
+    re_sous_titre   = re.compile(r'^(Sous-titre [^:]+):(.*)')
+    re_chapitre     = re.compile(r'^(Chapitre [^:]+):(.*)')
+    re_section      = re.compile(r'^(Section [^:]+):(.*)')
+    re_sous_section = re.compile(r'^(Sous-section [^:]+):(.*)')
+    re_paragraphe   = re.compile(r'^(Paragraphe [^:]+):(.*)')
+    re_prelim       = re.compile(r'^(Titre préliminaire)(.*)')
+    # Tous les articles sur la ligne
+    re_article      = re.compile(r'Article\s+([\w-]+)')
 
     LIVRE_PRELIM = "Titre préliminaire"
 
-    current_livre = None
-    current_livre_label = None
-    current_titre = None
-    current_titre_label = None
-    current_section = None
-    current_section_label = None
-    current_chapitre = None          # <-- NOUVEAU (facultatif, on ne l'affiche pas pour l'instant)
-    current_chapitre_label = None    # <-- NOUVEAU
+    current_livre = current_livre_label = None
+    current_titre = current_titre_label = None
+    current_sous_titre = current_sous_titre_label = None
+    current_chapitre = current_chapitre_label = None
+    current_section = current_section_label = None
+    current_sous_section = current_sous_section_label = None
+    current_paragraphe = current_paragraphe_label = None
     has_seen_livre = False
 
     try:
@@ -206,66 +208,103 @@ def get_article_context_map(path: str = CODE_CIVIL_PATH):
                 if not line:
                     continue
 
-                # Nouveau Livre
+                # -------- Livre --------
                 m_livre = re_livre.match(line)
                 if m_livre:
                     has_seen_livre = True
                     current_livre = m_livre.group(1)
                     current_livre_label = m_livre.group(2).strip(" :")
-                    current_titre = None
-                    current_titre_label = None
-                    current_section = None
-                    current_section_label = None
-                    current_chapitre = None
-                    current_chapitre_label = None
+                    # reset niveaux inférieurs
+                    current_titre = current_titre_label = None
+                    current_sous_titre = current_sous_titre_label = None
+                    current_chapitre = current_chapitre_label = None
+                    current_section = current_section_label = None
+                    current_sous_section = current_sous_section_label = None
+                    current_paragraphe = current_paragraphe_label = None
                     continue
 
-                # Titre préliminaire AVANT tout Livre
+                # -------- Titre préliminaire AVANT tout Livre --------
                 m_prelim = re_prelim.match(line)
                 if m_prelim and not has_seen_livre:
                     current_livre = LIVRE_PRELIM
                     current_livre_label = m_prelim.group(2).strip(" :")
                     current_titre = LIVRE_PRELIM
                     current_titre_label = current_livre_label
-                    current_section = None
-                    current_section_label = None
-                    current_chapitre = None
-                    current_chapitre_label = None
+                    current_sous_titre = current_sous_titre_label = None
+                    current_chapitre = current_chapitre_label = None
+                    current_section = current_section_label = None
+                    current_sous_section = current_sous_section_label = None
+                    current_paragraphe = current_paragraphe_label = None
                     continue
 
-                # Nouveau Titre
+                # -------- Titre --------
                 m_titre = re_titre.match(line)
                 if m_titre:
                     current_titre = m_titre.group(1)
                     current_titre_label = m_titre.group(2).strip(" :")
-                    current_section = None
-                    current_section_label = None
-                    current_chapitre = None
-                    current_chapitre_label = None
+                    # reset niveaux inférieurs
+                    current_sous_titre = current_sous_titre_label = None
+                    current_chapitre = current_chapitre_label = None
+                    current_section = current_section_label = None
+                    current_sous_section = current_sous_section_label = None
+                    current_paragraphe = current_paragraphe_label = None
+
                     if current_livre is None:
                         current_livre = LIVRE_PRELIM
                         if current_livre_label is None:
                             current_livre_label = ""
                     continue
 
-                # NOUVEAU : Nouveau Chapitre → on réinitialise la section
+                # -------- Sous-titre --------
+                m_sous_titre = re_sous_titre.match(line)
+                if m_sous_titre:
+                    current_sous_titre = m_sous_titre.group(1)
+                    current_sous_titre_label = m_sous_titre.group(2).strip(" :")
+                    # reset niveaux inférieurs
+                    current_chapitre = current_chapitre_label = None
+                    current_section = current_section_label = None
+                    current_sous_section = current_sous_section_label = None
+                    current_paragraphe = current_paragraphe_label = None
+                    continue
+
+                # -------- Chapitre --------
                 m_chapitre = re_chapitre.match(line)
                 if m_chapitre:
                     current_chapitre = m_chapitre.group(1)
                     current_chapitre_label = m_chapitre.group(2).strip(" :")
-                    # Très important : on "casse" la section précédente
-                    current_section = None
-                    current_section_label = None
+                    # reset niveaux inférieurs
+                    current_section = current_section_label = None
+                    current_sous_section = current_sous_section_label = None
+                    current_paragraphe = current_paragraphe_label = None
                     continue
 
-                # Nouvelle Section
+                # -------- Section --------
                 m_section = re_section.match(line)
                 if m_section:
                     current_section = m_section.group(1)
                     current_section_label = m_section.group(2).strip(" :")
+                    # reset niveaux inférieurs
+                    current_sous_section = current_sous_section_label = None
+                    current_paragraphe = current_paragraphe_label = None
                     continue
 
-                # Ligne qui contient un ou plusieurs articles
+                # -------- Sous-section --------
+                m_sous_section = re_sous_section.match(line)
+                if m_sous_section:
+                    current_sous_section = m_sous_section.group(1)
+                    current_sous_section_label = m_sous_section.group(2).strip(" :")
+                    # reset niveaux inférieurs
+                    current_paragraphe = current_paragraphe_label = None
+                    continue
+
+                # -------- Paragraphe --------
+                m_paragraphe = re_paragraphe.match(line)
+                if m_paragraphe:
+                    current_paragraphe = m_paragraphe.group(1)
+                    current_paragraphe_label = m_paragraphe.group(2).strip(" :")
+                    continue
+
+                # -------- Ligne avec un ou plusieurs articles --------
                 if "Article" in line:
                     articles = re_article.findall(line)
                     for art_num in articles:
@@ -275,11 +314,16 @@ def get_article_context_map(path: str = CODE_CIVIL_PATH):
                             "livre_label": current_livre_label,
                             "titre": current_titre,
                             "titre_label": current_titre_label,
-                            "section": current_section,
-                            "section_label": current_section_label,
-                            # on garde le chapitre en réserve si tu veux l'afficher plus tard
+                            "sous_titre": current_sous_titre,
+                            "sous_titre_label": current_sous_titre_label,
                             "chapitre": current_chapitre,
                             "chapitre_label": current_chapitre_label,
+                            "section": current_section,
+                            "section_label": current_section_label,
+                            "sous_section": current_sous_section,
+                            "sous_section_label": current_sous_section_label,
+                            "paragraphe": current_paragraphe,
+                            "paragraphe_label": current_paragraphe_label,
                         }
 
     except FileNotFoundError:
@@ -288,6 +332,7 @@ def get_article_context_map(path: str = CODE_CIVIL_PATH):
         st.error(f"Erreur lors du chargement du Code civil : {e}")
 
     return context
+
 
 def get_article_context(pred_art):
     """
@@ -387,14 +432,21 @@ layout_placeholder = st.empty()
 def render_left_panel(container):
     with container:
         # --- Contexte Livre / Titre / Section (HTML, sans **) ---
+        # --- Contexte hiérarchique Code civil (HTML) ---
         ctx = get_article_context(row["pred_art"])
         if ctx:
-            livre        = ctx.get("livre")
-            livre_label  = ctx.get("livre_label") or ""
-            titre        = ctx.get("titre")
-            titre_label  = ctx.get("titre_label") or ""
-            section      = ctx.get("section")
-            section_label = ctx.get("section_label") or ""
+            livre             = ctx.get("livre")
+            livre_label       = ctx.get("livre_label") or ""
+            titre             = ctx.get("titre")
+            titre_label       = ctx.get("titre_label") or ""
+            sous_titre        = ctx.get("sous_titre")
+            sous_titre_label  = ctx.get("sous_titre_label") or ""
+            chapitre          = ctx.get("chapitre")
+            chapitre_label    = ctx.get("chapitre_label") or ""
+            section           = ctx.get("section")
+            section_label     = ctx.get("section_label") or ""
+            sous_section      = ctx.get("sous_section")
+            sous_section_label = ctx.get("sous_section_label") or ""
 
             context_lines = []
 
@@ -406,20 +458,43 @@ def render_left_panel(container):
                 )
             if titre:
                 context_lines.append(
-                    f"<div style='font-size:1rem; font-weight:600; margin-bottom:0.15rem;'>"
+                    f"<div style='font-size:1.0rem; font-weight:650; margin-bottom:0.15rem;'>"
                     f"{html.escape(titre)} — {html.escape(titre_label)}"
+                    f"</div>"
+                )
+            if sous_titre:
+                context_lines.append(
+                    f"<div style='font-size:0.95rem; font-weight:600; margin-bottom:0.15rem;'>"
+                    f"{html.escape(sous_titre)} — {html.escape(sous_titre_label)}"
+                    f"</div>"
+                )
+            if chapitre:
+                context_lines.append(
+                    f"<div style='font-size:0.95rem; font-weight:600; margin-bottom:0.15rem;'>"
+                    f"{html.escape(chapitre)} — {html.escape(chapitre_label)}"
                     f"</div>"
                 )
             if section:
                 context_lines.append(
-                    f"<div style='font-size:0.95rem; font-weight:600; margin-bottom:0.3rem;'>"
+                    f"<div style='font-size:0.9rem; font-weight:600; margin-bottom:0.15rem;'>"
                     f"{html.escape(section)} — {html.escape(section_label)}"
+                    f"</div>"
+                )
+            if sous_section:
+                context_lines.append(
+                    f"<div style='font-size:0.9rem; font-weight:500; margin-bottom:0.2rem;'>"
+                    f"{html.escape(sous_section)} — {html.escape(sous_section_label)}"
                     f"</div>"
                 )
 
             if context_lines:
-                html_block = "<div style='margin-bottom:0.5rem;'>" + "".join(context_lines) + "</div><hr/>"
+                html_block = (
+                    "<div style='margin-bottom:0.5rem;'>"
+                    + "".join(context_lines)
+                    + "</div><hr/>"
+                )
                 st.markdown(html_block, unsafe_allow_html=True)
+
 
 
         # --- Article ---
