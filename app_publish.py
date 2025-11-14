@@ -364,23 +364,32 @@ layout_placeholder = st.empty()
 # -----------------------------------------------------------------------------
 def render_left_panel(container):
     with container:
-        # --- Contexte Livre / Titre / Section ---
+        # --- Contexte Livre / Titre / Section (mise en forme) ---
         ctx = get_article_context(row["pred_art"])
         if ctx:
-            parts = []
-            if ctx.get("livre"):
-                livre_label = ctx.get("livre_label") or ""
-                parts.append(f"**{ctx['livre']}** — {livre_label}")
-            if ctx.get("titre"):
-                titre_label = ctx.get("titre_label") or ""
-                parts.append(f"**{ctx['titre']}** — {titre_label}")
-            if ctx.get("section"):
-                section_label = ctx.get("section_label") or ""
-                parts.append(f"**{ctx['section']}** — {section_label}")
+            livre_label   = ctx.get("livre_label") or ""
+            titre_label   = ctx.get("titre_label") or ""
+            section_label = ctx.get("section_label") or ""
 
-            if parts:
-                st.markdown("\n\n".join(parts))
-                st.markdown("---")
+            # Niveau 1 : Livre (grand)
+            if ctx.get("livre"):
+                st.markdown(
+                    f"### **{ctx['livre']}** — {livre_label}"
+                )
+
+            # Niveau 2 : Titre (moyen)
+            if ctx.get("titre"):
+                st.markdown(
+                    f"#### **{ctx['titre']}** — {titre_label}"
+                )
+
+            # Niveau 3 : Section (normal, juste en gras)
+            if ctx.get("section"):
+                st.markdown(
+                    f"**{ctx['section']}** — {section_label}"
+                )
+
+            st.markdown("---")
 
         # --- Article ---
         st.markdown(f"### Article {row['pred_art']}")
