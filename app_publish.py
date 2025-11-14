@@ -173,18 +173,19 @@ def render_decision_panel(full_text_html: str):
 @st.cache_resource
 def get_article_context_map(path: str = CODE_CIVIL_PATH):
     """
-    Construit un mapping article -> contexte (Livre, Titre, Section) à partir
-    du fichier texte complet du Code civil.
+    Construit un mapping article -> contexte (Livre, Titre, Section)
+    à partir du fichier texte complet du Code civil.
     Clé = numéro d'article ("1224", "1216-1", etc.).
     """
     context = {}
 
-    re_livre   = re.compile(r'^(Livre [^:]+):(.*)')
-    re_titre   = re.compile(r'^(Titre [^:]+):(.*)')
-    re_section = re.compile(r'^(Section [^:]+):(.*)')
-    re_prelim  = re.compile(r'^(Titre préliminaire)(.*)')
+    re_livre    = re.compile(r'^(Livre [^:]+):(.*)')
+    re_titre    = re.compile(r'^(Titre [^:]+):(.*)')
+    re_section  = re.compile(r'^(Section [^:]+):(.*)')
+    re_prelim   = re.compile(r'^(Titre préliminaire)(.*)')
+    re_chapitre = re.compile(r'^(Chapitre [^:]+):(.*)')  # <-- NOUVEAU
     # ⚠️ Ici on capte *tous* les articles sur la ligne, pas seulement le premier
-    re_article = re.compile(r'Article\s+([\w-]+)')
+    re_article  = re.compile(r'Article\s+([\w-]+)')
 
     LIVRE_PRELIM = "Titre préliminaire"
 
@@ -194,6 +195,8 @@ def get_article_context_map(path: str = CODE_CIVIL_PATH):
     current_titre_label = None
     current_section = None
     current_section_label = None
+    current_chapitre = None          # <-- NOUVEAU (facultatif, on ne l'affiche pas pour l'instant)
+    current_chapitre_label = None    # <-- NOUVEAU
     has_seen_livre = False
 
     try:
@@ -213,6 +216,8 @@ def get_article_context_map(path: str = CODE_CIVIL_PATH):
                     current_titre_label = None
                     current_section = None
                     current_section_label = None
+                    current_chapitre = None
+                    current_chapitre_label = None
                     continue
 
                 # Titre préliminaire AVANT tout Livre
@@ -224,6 +229,8 @@ def get_article_context_map(path: str = CODE_CIVIL_PATH):
                     current_titre_label = current_livre_label
                     current_section = None
                     current_section_label = None
+                    current_chapitre = None
+                    current_chapitre_label = None
                     continue
 
                 # Nouveau Titre
@@ -233,10 +240,22 @@ def get_article_context_map(path: str = CODE_CIVIL_PATH):
                     current_titre_label = m_titre.group(2).strip(" :")
                     current_section = None
                     current_section_label = None
+                    current_chapitre = None
+                    current_chapitre_label = None
                     if current_livre is None:
                         current_livre = LIVRE_PRELIM
                         if current_livre_label is None:
                             current_livre_label = ""
+                    continue
+
+                # NOUVEAU : Nouveau Chapitre → on réinitialise la section
+                m_chapitre = re_chapitre.match(line)
+                if m_chapitre:
+                    current_chapitre = m_chapitre.group(1)
+                    current_chapitre_label = m_chapitre.group(2).strip(" :")
+                    # Très important : on "casse" la section précédente
+                    current_section = None
+                    current_section_label = None
                     continue
 
                 # Nouvelle Section
@@ -258,6 +277,9 @@ def get_article_context_map(path: str = CODE_CIVIL_PATH):
                             "titre_label": current_titre_label,
                             "section": current_section,
                             "section_label": current_section_label,
+                            # on garde le chapitre en réserve si tu veux l'afficher plus tard
+                            "chapitre": current_chapitre,
+                            "chapitre_label": current_chapitre_label,
                         }
 
     except FileNotFoundError:
