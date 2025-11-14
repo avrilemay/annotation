@@ -10,7 +10,10 @@ import os
 # -----------------------------------------------------------------------------
 APP_TITLE = "Annotation implicite articles ↔ décisions"
 PICKLE_INDEX_PATH = "decision_index.pkl.bz2"    # Index de correspondance vers JSON (compressé)
-AUTOSAVE_PATH = "annotations_autosave.xlsx"      # Fichier autosave local
+AUTOSAVE_PATH = "annotations_autosave.xlsx"     # Fichier autosave local
+
+# Fichier texte contenant la structure complète du Code civil
+CODE_CIVIL_PATH = "code_civil_full_list_cleaned.txt"  # <-- à adapter si besoin
 
 # Libellés autorisés pour la colonne 'implicit'
 LABEL_CHOICES = (
@@ -165,6 +168,120 @@ def render_decision_panel(full_text_html: str):
     )
 
 # -----------------------------------------------------------------------------
+# 3bis. Mapping Code civil : article -> (Livre, Titre, Section)
+# -----------------------------------------------------------------------------
+@st.cache_resource
+def get_article_context_map(path: str = CODE_CIVIL_PATH):
+    """
+    Construit un mapping article -> contexte (Livre, Titre, Section) à partir
+    du fichier texte complet du Code civil.
+    Clé = numéro d'article ("1224", "1216-1", etc.).
+    """
+    context = {}
+
+    re_livre   = re.compile(r'^(Livre [^:]+):(.*)')
+    re_titre   = re.compile(r'^(Titre [^:]+):(.*)')
+    re_section = re.compile(r'^(Section [^:]+):(.*)')
+    re_prelim  = re.compile(r'^(Titre préliminaire)(.*)')
+    re_article = re.compile(r'^Article\s+([\w-]+)')
+
+    LIVRE_PRELIM = "Titre préliminaire"
+
+    current_livre = None
+    current_livre_label = None
+    current_titre = None
+    current_titre_label = None
+    current_section = None
+    current_section_label = None
+    has_seen_livre = False
+
+    try:
+        with open(path, encoding="utf-8") as f:
+            for line in f:
+                line = line.strip()
+                if not line:
+                    continue
+
+                # Nouveau Livre
+                m_livre = re_livre.match(line)
+                if m_livre:
+                    has_seen_livre = True
+                    current_livre = m_livre.group(1)
+                    current_livre_label = m_livre.group(2).strip(" :")
+                    current_titre = None
+                    current_titre_label = None
+                    current_section = None
+                    current_section_label = None
+                    continue
+
+                # Titre préliminaire AVANT tout Livre
+                m_prelim = re_prelim.match(line)
+                if m_prelim and not has_seen_livre:
+                    current_livre = LIVRE_PRELIM
+                    current_livre_label = m_prelim.group(2).strip(" :")
+                    current_titre = LIVRE_PRELIM
+                    current_titre_label = current_livre_label
+                    current_section = None
+                    current_section_label = None
+                    continue
+
+                # Nouveau Titre
+                m_titre = re_titre.match(line)
+                if m_titre:
+                    current_titre = m_titre.group(1)
+                    current_titre_label = m_titre.group(2).strip(" :")
+                    current_section = None
+                    current_section_label = None
+                    # Si pas encore de Livre, on rattache au préliminaire
+                    if current_livre is None:
+                        current_livre = LIVRE_PRELIM
+                        if current_livre_label is None:
+                            current_livre_label = ""
+                    continue
+
+                # Nouvelle Section
+                m_section = re_section.match(line)
+                if m_section:
+                    current_section = m_section.group(1)
+                    current_section_label = m_section.group(2).strip(" :")
+                    continue
+
+                # Ligne d'article
+                m_art = re_article.match(line)
+                if m_art:
+                    art_num = m_art.group(1).strip()
+                    context[art_num] = {
+                        "livre": current_livre,
+                        "livre_label": current_livre_label,
+                        "titre": current_titre,
+                        "titre_label": current_titre_label,
+                        "section": current_section,
+                        "section_label": current_section_label,
+                    }
+
+    except FileNotFoundError:
+        st.error(f"Fichier Code civil introuvable : {path}")
+    except Exception as e:
+        st.error(f"Erreur lors du chargement du Code civil : {e}")
+
+    return context
+
+def get_article_context(pred_art):
+    """
+    Normalise la valeur de pred_art et renvoie le contexte (Livre, Titre, Section)
+    ou None si inconnu.
+    """
+    if pred_art is None:
+        return None
+
+    # Exemple : "1224", 1224, "Article 1224", "art. 1224"
+    art_str = str(pred_art)
+    art_str = art_str.replace("Article", "").replace("art.", "").strip()
+
+    ctx_map = get_article_context_map()
+    return ctx_map.get(art_str)
+
+# -----------------------------------------------------------------------------
 # 4. Filtrage des lignes à annoter
 # -----------------------------------------------------------------------------
 mask    = (df["implicit"] == "") | (df["revoir"] == "Oui")
@@ -237,12 +354,33 @@ layout_placeholder = st.empty()
 # -----------------------------------------------------------------------------
 def render_left_panel(container):
     with container:
+        # --- Contexte Livre / Titre / Section ---
+        ctx = get_article_context(row["pred_art"])
+        if ctx:
+            parts = []
+            if ctx.get("livre"):
+                livre_label = ctx.get("livre_label") or ""
+                parts.append(f"**{ctx['livre']}** — {livre_label}")
+            if ctx.get("titre"):
+                titre_label = ctx.get("titre_label") or ""
+                parts.append(f"**{ctx['titre']}** — {titre_label}")
+            if ctx.get("section"):
+                section_label = ctx.get("section_label") or ""
+                parts.append(f"**{ctx['section']}** — {section_label}")
+
+            if parts:
+                st.markdown("\n\n".join(parts))
+                st.markdown("---")
+
+        # --- Article ---
         st.markdown(f"### Article {row['pred_art']}")
         st.write(row["article_text"])
 
+        # --- Chunk ---
         st.markdown("### Chunk à annoter")
         st.write(row["text"])
 
+        # --- Annotation ---
         st.markdown("### L'article est-il appliqué implicitement ?")
         with st.form(key=f"form_{idx}"):
             reponse = st.radio(
