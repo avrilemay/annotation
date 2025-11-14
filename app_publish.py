@@ -364,32 +364,41 @@ layout_placeholder = st.empty()
 # -----------------------------------------------------------------------------
 def render_left_panel(container):
     with container:
-        # --- Contexte Livre / Titre / Section (mise en forme) ---
+        # --- Contexte Livre / Titre / Section (HTML, sans **) ---
         ctx = get_article_context(row["pred_art"])
         if ctx:
-            livre_label   = ctx.get("livre_label") or ""
-            titre_label   = ctx.get("titre_label") or ""
+            livre        = ctx.get("livre")
+            livre_label  = ctx.get("livre_label") or ""
+            titre        = ctx.get("titre")
+            titre_label  = ctx.get("titre_label") or ""
+            section      = ctx.get("section")
             section_label = ctx.get("section_label") or ""
 
-            # Niveau 1 : Livre (grand)
-            if ctx.get("livre"):
-                st.markdown(
-                    f"### **{ctx['livre']}** — {livre_label}"
+            context_lines = []
+
+            if livre:
+                context_lines.append(
+                    f"<div style='font-size:1.1rem; font-weight:700; margin-bottom:0.15rem;'>"
+                    f"{html.escape(livre)} — {html.escape(livre_label)}"
+                    f"</div>"
+                )
+            if titre:
+                context_lines.append(
+                    f"<div style='font-size:1rem; font-weight:600; margin-bottom:0.15rem;'>"
+                    f"{html.escape(titre)} — {html.escape(titre_label)}"
+                    f"</div>"
+                )
+            if section:
+                context_lines.append(
+                    f"<div style='font-size:0.95rem; font-weight:600; margin-bottom:0.3rem;'>"
+                    f"{html.escape(section)} — {html.escape(section_label)}"
+                    f"</div>"
                 )
 
-            # Niveau 2 : Titre (moyen)
-            if ctx.get("titre"):
-                st.markdown(
-                    f"#### **{ctx['titre']}** — {titre_label}"
-                )
+            if context_lines:
+                html_block = "<div style='margin-bottom:0.5rem;'>" + "".join(context_lines) + "</div><hr/>"
+                st.markdown(html_block, unsafe_allow_html=True)
 
-            # Niveau 3 : Section (normal, juste en gras)
-            if ctx.get("section"):
-                st.markdown(
-                    f"**{ctx['section']}** — {section_label}"
-                )
-
-            st.markdown("---")
 
         # --- Article ---
         st.markdown(f"### Article {row['pred_art']}")
