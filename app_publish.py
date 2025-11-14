@@ -183,7 +183,8 @@ def get_article_context_map(path: str = CODE_CIVIL_PATH):
     re_titre   = re.compile(r'^(Titre [^:]+):(.*)')
     re_section = re.compile(r'^(Section [^:]+):(.*)')
     re_prelim  = re.compile(r'^(Titre préliminaire)(.*)')
-    re_article = re.compile(r'^Article\s+([\w-]+)')
+    # ⚠️ Ici on capte *tous* les articles sur la ligne, pas seulement le premier
+    re_article = re.compile(r'Article\s+([\w-]+)')
 
     LIVRE_PRELIM = "Titre préliminaire"
 
@@ -232,7 +233,6 @@ def get_article_context_map(path: str = CODE_CIVIL_PATH):
                     current_titre_label = m_titre.group(2).strip(" :")
                     current_section = None
                     current_section_label = None
-                    # Si pas encore de Livre, on rattache au préliminaire
                     if current_livre is None:
                         current_livre = LIVRE_PRELIM
                         if current_livre_label is None:
@@ -246,18 +246,19 @@ def get_article_context_map(path: str = CODE_CIVIL_PATH):
                     current_section_label = m_section.group(2).strip(" :")
                     continue
 
-                # Ligne d'article
-                m_art = re_article.match(line)
-                if m_art:
-                    art_num = m_art.group(1).strip()
-                    context[art_num] = {
-                        "livre": current_livre,
-                        "livre_label": current_livre_label,
-                        "titre": current_titre,
-                        "titre_label": current_titre_label,
-                        "section": current_section,
-                        "section_label": current_section_label,
-                    }
+                # Ligne qui contient un ou plusieurs articles
+                if "Article" in line:
+                    articles = re_article.findall(line)
+                    for art_num in articles:
+                        art_num = art_num.strip()
+                        context[art_num] = {
+                            "livre": current_livre,
+                            "livre_label": current_livre_label,
+                            "titre": current_titre,
+                            "titre_label": current_titre_label,
+                            "section": current_section,
+                            "section_label": current_section_label,
+                        }
 
     except FileNotFoundError:
         st.error(f"Fichier Code civil introuvable : {path}")
@@ -270,16 +271,25 @@ def get_article_context(pred_art):
     """
     Normalise la valeur de pred_art et renvoie le contexte (Livre, Titre, Section)
     ou None si inconnu.
+
+    Gère notamment les valeurs du type 1224.0, "Article 1224", "art. 1224-1", etc.
     """
     if pred_art is None:
         return None
 
-    # Exemple : "1224", 1224, "Article 1224", "art. 1224"
-    art_str = str(pred_art)
-    art_str = art_str.replace("Article", "").replace("art.", "").strip()
+    s = str(pred_art)
+    # On enlève les préfixes classiques
+    s = s.replace("Article", "").replace("art.", "").strip()
+
+    # On récupère un motif du type "1224" ou "1224-1"
+    m = re.search(r'(\d+(?:-\d+)?)', s)
+    if not m:
+        return None
+
+    art_key = m.group(1)  # ex: "1224", "1224-1"
 
     ctx_map = get_article_context_map()
-    return ctx_map.get(art_str)
+    return ctx_map.get(art_key)
 
 # -----------------------------------------------------------------------------
 # 4. Filtrage des lignes à annoter
